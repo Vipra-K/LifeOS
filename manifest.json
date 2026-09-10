@@ -6,7 +6,8 @@
   "permissions": ["storage", "alarms", "tabs", "declarativeNetRequest", "declarativeNetRequestWithHostAccess", "identity"],
   "host_permissions": ["<all_urls>", "https://github.com/*", "https://leetcode.com/*", "https://www.googleapis.com/*"],
   "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_title": "Focus status", "default_popup": "popup.html" },
+  "action": { "default_title": "Focus status", "default_popup": "popup.html", "default_icon": { "128": "icon128.svg" } },
+  "icons": { "128": "icon128.svg" },
   "chrome_url_overrides": { "newtab": "newtab.html" },
   "options_page": "options.html",
   "oauth2": {
