@@ -1,8 +1,93 @@
-const W={deepWork:'Deep Work',github:'GitHub',leetcode:'LeetCode',habits:'Habits',upcoming:'Upcoming',tasks:'Today’s Tasks'};let state={widgets:[],profiles:{},themeSettings:{backgroundMode:'time',customBackground:null},github:'',leetcode:''};const $=s=>document.querySelector(s);async function load(){const d=await chrome.storage.local.get(['widgets','profiles','themeSettings','integrations']);state.widgets=d.widgets||['deepWork','github','habits','upcoming'];state.profiles=d.profiles||{};state.themeSettings=d.themeSettings||state.themeSettings;state.github=d.integrations?.github||'';state.leetcode=d.integrations?.leetcode||'';render()}function render(){
-$('#widgets').innerHTML=Object.entries(W).map(([id,n])=>`<label class="choice"><input type="checkbox" data-widget="${id}" ${state.widgets.includes(id)?'checked':''}><span>${n}</span></label>`).join('');
-$('#profiles').innerHTML=Object.values(state.profiles).map(p=>`<div class="profile"><b>${p.icon||'•'} ${p.name}</b><input data-profile="${p.id}" value="${p.sites.join(', ')}"><button class="secondary" data-delete="${p.id}">Delete</button></div>`).join('');
-$('#github').value=state.github;$('#leetcode').value=state.leetcode;document.querySelector(`input[name=bg][value="${state.themeSettings.backgroundMode}"]`).checked=true;if(state.themeSettings.customBackground)$('#preview').style.backgroundImage=`url(${state.themeSettings.customBackground})`;
+const W={deepWork:'Deep Work',github:'GitHub',leetcode:'LeetCode',habits:'Habits',upcoming:'Upcoming',tasks:'Today’s Tasks'};
+let state={widgets:[],profiles:{},themeSettings:{backgroundMode:'time',customBackground:null},github:'',leetcode:''};
+const $=s=>document.querySelector(s);
+
+async function load(){
+  const d=await chrome.storage.local.get(['widgets','profiles','themeSettings','integrations']);
+  state.widgets=d.widgets||['deepWork','github','habits','upcoming'];
+  state.profiles=d.profiles||{};
+  state.themeSettings=d.themeSettings||state.themeSettings;
+  state.github=d.integrations?.github||'';
+  state.leetcode=d.integrations?.leetcode||'';
+  render();
 }
-$('#save').onclick=async()=>{state.widgets=[...document.querySelectorAll('[data-widget]:checked')].map(x=>x.dataset.widget);document.querySelectorAll('[data-profile]').forEach(x=>{if(state.profiles[x.dataset.profile])state.profiles[x.dataset.profile].sites=x.value.split(',').map(v=>v.trim()).filter(Boolean)});state.themeSettings.backgroundMode=document.querySelector('input[name=bg]:checked').value;state.github=$('#github').value.trim();state.leetcode=$('#leetcode').value.trim();await chrome.storage.local.set({widgets:state.widgets,profiles:state.profiles,themeSettings:state.themeSettings,integrations:{github:state.github,leetcode:state.leetcode}});await chrome.runtime.sendMessage({type:'SYNC_RULES'});$('#save').textContent='Saved ✓';setTimeout(()=>$('#save').textContent='Save changes',1200)};
-$('#addProfile').onclick=()=>{const id=`custom-${Date.now()}`;state.profiles[id]={id,name:'Custom Focus',icon:'✦',sites:['chatgpt.com','google.com']};render()};document.addEventListener('click',e=>{const id=e.target.dataset.delete;if(id){delete state.profiles[id];render()}});$('#image').onchange=e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{state.themeSettings.customBackground=reader.result;state.themeSettings.backgroundMode='custom';$('input[value=custom]').checked=true;$('#preview').style.backgroundImage=`url(${reader.result})`};reader.readAsDataURL(f)});
-$('#calendar').onclick=async()=>{try{const token=await chrome.identity.getAuthToken({interactive:true});const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin='+encodeURIComponent(new Date().toISOString()),{headers:{Authorization:'Bearer '+token.token}});if(!r.ok)throw new Error('Calendar request failed');const j=await r.json();await chrome.storage.local.set({calendarEvents:j.items||[]});$('#calendar').textContent='Connected ✓'}catch(e){alert('Calendar connection needs a configured Google OAuth client ID in manifest.json.')}};load();
+
+function render(){
+  $('#widgets').innerHTML=Object.entries(W).map(([id,n])=>`<label class="choice"><input type="checkbox" data-widget="${id}" ${state.widgets.includes(id)?'checked':''}><span>${n}</span></label>`).join('');
+  $('#profiles').innerHTML=Object.values(state.profiles).map(p=>`<div class="profile"><b>${p.icon||'•'} ${p.name}</b><input data-profile="${p.id}" value="${p.sites.join(', ')}"><button class="secondary" data-delete="${p.id}">Delete</button></div>`).join('');
+  $('#github').value=state.github;
+  $('#leetcode').value=state.leetcode;
+  const bg=document.querySelector(`input[name=bg][value="${state.themeSettings.backgroundMode}"]`);
+  if(bg)bg.checked=true;
+  if(state.themeSettings.customBackground)$('#preview').style.backgroundImage=`url(${state.themeSettings.customBackground})`;
+}
+
+$('#save').onclick=async()=>{
+  const saveButton=$('#save');
+  try{
+    state.widgets=[...document.querySelectorAll('[data-widget]:checked')].map(x=>x.dataset.widget);
+    document.querySelectorAll('[data-profile]').forEach(x=>{
+      if(state.profiles[x.dataset.profile])state.profiles[x.dataset.profile].sites=x.value.split(',').map(v=>v.trim()).filter(Boolean);
+    });
+    state.themeSettings.backgroundMode=document.querySelector('input[name=bg]:checked')?.value||'time';
+    state.github=$('#github').value.trim().replace(/^@/,'');
+    state.leetcode=$('#leetcode').value.trim().replace(/^@/,'');
+
+    await chrome.storage.local.set({
+      widgets:state.widgets,
+      profiles:state.profiles,
+      themeSettings:state.themeSettings,
+      integrations:{github:state.github,leetcode:state.leetcode}
+    });
+
+    saveButton.textContent='Saved ✓';
+    setTimeout(()=>saveButton.textContent='Save changes',1200);
+
+    // Sync blocking rules separately. A rules-sync failure must not make
+    // successfully persisted settings look like they were not saved.
+    try{await chrome.runtime.sendMessage({type:'SYNC_RULES'});}catch(e){console.warn('Focus rules sync failed:',e);}
+  }catch(e){
+    console.error('Failed to save settings:',e);
+    saveButton.textContent='Save failed';
+    setTimeout(()=>saveButton.textContent='Save changes',1600);
+  }
+};
+
+$('#addProfile').onclick=()=>{
+  const id=`custom-${Date.now()}`;
+  state.profiles[id]={id,name:'Custom Focus',icon:'✦',sites:['chatgpt.com','google.com']};
+  render();
+};
+
+document.addEventListener('click',e=>{
+  const id=e.target.dataset.delete;
+  if(id){delete state.profiles[id];render();}
+});
+
+$('#image').onchange=e=>{
+  const f=e.target.files[0];
+  if(!f)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    state.themeSettings.customBackground=reader.result;
+    state.themeSettings.backgroundMode='custom';
+    $('input[value=custom]').checked=true;
+    $('#preview').style.backgroundImage=`url(${reader.result})`;
+  };
+  reader.readAsDataURL(f);
+};
+
+$('#calendar').onclick=async()=>{
+  try{
+    const token=await chrome.identity.getAuthToken({interactive:true});
+    const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin='+encodeURIComponent(new Date().toISOString()),{headers:{Authorization:'Bearer '+token.token}});
+    if(!r.ok)throw new Error('Calendar request failed');
+    const j=await r.json();
+    await chrome.storage.local.set({calendarEvents:j.items||[]});
+    $('#calendar').textContent='Connected ✓';
+  }catch(e){
+    alert('Calendar connection needs a configured Google OAuth client ID in manifest.json.');
+  }
+};
+
+load();
