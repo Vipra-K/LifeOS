@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "LIFE.OS",
+  "version": "1.0.0",
+  "description": "A cinematic, local-first new tab and focus workspace for developers.",
+  "permissions": ["storage", "alarms", "tabs", "declarativeNetRequest", "declarativeNetRequestWithHostAccess", "identity"],
+  "host_permissions": ["<all_urls>", "https://github.com/*", "https://leetcode.com/*", "https://www.googleapis.com/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "Focus status", "default_popup": "popup.html" },
+  "chrome_url_overrides": { "newtab": "newtab.html" },
+  "options_page": "options.html",
+  "oauth2": {
+    "client_id": "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/calendar.readonly"]
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' data: https: blob:; style-src 'self' 'unsafe-inline'"
+  }
+}
