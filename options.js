@@ -43,8 +43,6 @@ $('#save').onclick=async()=>{
     saveButton.textContent='Saved ✓';
     setTimeout(()=>saveButton.textContent='Save changes',1200);
 
-    // Sync blocking rules separately. A rules-sync failure must not make
-    // successfully persisted settings look like they were not saved.
     try{await chrome.runtime.sendMessage({type:'SYNC_RULES'});}catch(e){console.warn('Focus rules sync failed:',e);}
   }catch(e){
     console.error('Failed to save settings:',e);
@@ -77,16 +75,40 @@ $('#image').onchange=e=>{
   reader.readAsDataURL(f);
 };
 
+function showCalendarError(message){
+  const text=String(message||'Unknown error');
+  console.error('Google Calendar connection failed:',text);
+  alert(`Google Calendar connection failed.\n\n${text}`);
+}
+
 $('#calendar').onclick=async()=>{
   try{
-    const token=await chrome.identity.getAuthToken({interactive:true});
+    if(!chrome.identity?.getAuthToken){
+      throw new Error('Chrome identity API is unavailable. Make sure the extension has the "identity" permission and reload it from chrome://extensions.');
+    }
+
+    let token;
+    try{
+      token=await chrome.identity.getAuthToken({interactive:true});
+    }catch(e){
+      const code=e?.message||e?.error||e?.code||'OAuth token request failed';
+      throw new Error(`OAuth token request failed: ${code}`);
+    }
+
+    if(!token?.token)throw new Error('Chrome returned no OAuth access token. Check the oauth2.client_id and scopes in manifest.json, then reload the extension.');
+
     const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin='+encodeURIComponent(new Date().toISOString()),{headers:{Authorization:'Bearer '+token.token}});
-    if(!r.ok)throw new Error('Calendar request failed');
+    if(!r.ok){
+      let detail='';
+      try{const body=await r.json();detail=body?.error?.message||body?.error_description||'';}catch{}
+      throw new Error(`Calendar API returned HTTP ${r.status}${detail?`: ${detail}`:''}`);
+    }
+
     const j=await r.json();
-    await chrome.storage.local.set({calendarEvents:j.items||[]});
+    await chrome.storage.local.set({calendarEvents:j.items||[],calendarConnected:true});
     $('#calendar').textContent='Connected ✓';
   }catch(e){
-    alert('Calendar connection needs a configured Google OAuth client ID in manifest.json.');
+    showCalendarError(e?.message||String(e));
   }
 };
 
