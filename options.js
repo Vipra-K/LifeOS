@@ -3,13 +3,14 @@ let state={widgets:[],profiles:{},themeSettings:{backgroundMode:'time',customBac
 const $=s=>document.querySelector(s);
 
 async function load(){
-  const d=await chrome.storage.local.get(['widgets','profiles','themeSettings','integrations']);
+  const d=await chrome.storage.local.get(['widgets','profiles','themeSettings','integrations','calendarConnected']);
   state.widgets=d.widgets||['deepWork','github','habits','upcoming'];
   state.profiles=d.profiles||{};
   state.themeSettings=d.themeSettings||state.themeSettings;
   state.github=d.integrations?.github||'';
   state.leetcode=d.integrations?.leetcode||'';
   render();
+  if(d.calendarConnected)$('#calendar').textContent='Connected ✓';
 }
 
 function render(){
@@ -82,6 +83,12 @@ function showCalendarError(message){
 }
 
 $('#calendar').onclick=async()=>{
+  const button=$('#calendar');
+  const originalText=button.textContent;
+  button.disabled=true;
+  button.classList.add('loading');
+  button.innerHTML='<span class="spinner" aria-hidden="true"></span><span>Connecting…</span>';
+
   try{
     if(!chrome.identity?.getAuthToken){
       throw new Error('Chrome identity API is unavailable. Make sure the extension has the "identity" permission and reload it from chrome://extensions.');
@@ -106,8 +113,12 @@ $('#calendar').onclick=async()=>{
 
     const j=await r.json();
     await chrome.storage.local.set({calendarEvents:j.items||[],calendarConnected:true});
-    $('#calendar').textContent='Connected ✓';
+    button.classList.remove('loading');
+    button.textContent='Connected ✓';
   }catch(e){
+    button.disabled=false;
+    button.classList.remove('loading');
+    button.textContent=originalText;
     showCalendarError(e?.message||String(e));
   }
 };
